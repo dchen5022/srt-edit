@@ -1,5 +1,9 @@
 use regex::Regex;
 use std::error::Error;
+use std::fs;
+use std::process;
+use std::fs::File;
+use std::io::Write;
 
 #[derive(Debug)]
 pub struct Config {
@@ -34,7 +38,8 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-    pub fn new(str: &str) -> Result<Self, ParseError> {
+    // !TODO add constraints for values (<60 for mins and secs)
+    pub fn build(str: &str) -> Result<Self, ParseError> {
         let re = Regex::new(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})").unwrap();
 
         let captures = match re.captures(str) {
@@ -120,6 +125,10 @@ impl Timestamp {
         self.milliseconds = (remaining_milliseconds % 1_000) as u32;
     }
 
+    pub fn to_string(&self) -> String {
+        format!("{:02}:{:02}:{:02},{:03}", self.hours, self.minutes, self.seconds, self.milliseconds)
+    }
+
 }
 
 #[derive(Debug)]
@@ -129,14 +138,47 @@ pub struct ParseError {
 
 impl ParseError {
     pub fn new(error_message: String) -> Self {
-        ParseError {
-            error_message
-        }
+        ParseError { error_message }
     }
 }
 
-pub fn run() {
-    todo!()
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let input_filepath = &config.input_filepath;
+    let output_filepath = &config.output_filepath;
+
+    let contents = fs::read_to_string(input_filepath).unwrap_or_else(|err| {
+        eprintln!("Couldn't read file: {input_filepath}, {err}");
+        process::exit(1);
+    });
+
+    let input_lines: Vec<&str> = contents.lines().collect();
+
+    let re = Regex::new(r"^(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})$").unwrap();
+
+    let mut output_content: Vec<String> = Vec::with_capacity(input_lines.len());
+    for line in contents.lines() {
+        if let Some(captures) = re.captures(line) {
+            let start_timestamp_str = captures.get(1).unwrap().as_str();
+            let mut start_timestamp = Timestamp::build(start_timestamp_str).unwrap();
+            let end_timestamp_str = captures.get(2).unwrap().as_str();
+            let mut end_timestamp = Timestamp::build(end_timestamp_str).unwrap();
+
+            start_timestamp.apply_offset_ms(config.offset_ms);
+            end_timestamp.apply_offset_ms(config.offset_ms);
+
+            let offset_line = format!("{} --> {}", start_timestamp.to_string(), end_timestamp.to_string()); 
+            output_content.push(offset_line);
+
+        } else {
+            output_content.push(line.to_string());
+        }
+    }
+
+    let mut output_file = File::create(output_filepath)?;
+    let output_string = output_content.join("\n");
+    output_file.write_all(output_string.as_bytes())?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -146,7 +188,7 @@ mod test {
     #[test]
     fn parse_valid_timestamp() {
         let valid_timestamp_str = "16:54:12,590";
-        let timestamp = Timestamp::new(valid_timestamp_str).unwrap();
+        let timestamp = Timestamp::build(valid_timestamp_str).unwrap();
 
         assert_eq!(16, timestamp.hours);
         assert_eq!(54, timestamp.minutes);
@@ -156,7 +198,7 @@ mod test {
 
     #[test]
     fn apply_offest() {
-        let mut timestamp = Timestamp::new("16:54:12,590").unwrap();
+        let mut timestamp = Timestamp::build("16:54:12,590").unwrap();
         timestamp.apply_offset_ms(100);
         
         assert_eq!(16, timestamp.hours);
@@ -164,7 +206,7 @@ mod test {
         assert_eq!(12, timestamp.seconds);
         assert_eq!(690, timestamp.milliseconds);
 
-        timestamp = Timestamp::new("10:59:59,900").unwrap();
+        timestamp = Timestamp::build("10:59:59,900").unwrap();
         timestamp.apply_offset_ms(500);
         assert_eq!(11, timestamp.hours);
         assert_eq!(0, timestamp.minutes);
