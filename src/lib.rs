@@ -40,7 +40,7 @@ pub struct Timestamp {
 impl Timestamp {
     // !TODO add constraints for values (<60 for mins and secs)
     pub fn build(str: &str) -> Result<Self, ParseError> {
-        let re = Regex::new(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})").unwrap();
+        let re = Regex::new(r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})$").unwrap();
 
         let captures = match re.captures(str) {
             Some(captures) => captures,
@@ -49,9 +49,14 @@ impl Timestamp {
 
         let hours = match captures.get(1) {
             Some(hours_match) => match hours_match.as_str().parse() {
-                Ok(hours) => hours,
+                Ok(hours) => match hours {
+                    h if h <= 99 => h,
+                    _ => return Err(ParseError::new(
+                        format!("Malformed hours field in timestamp: {}", str)
+                    ))
+                }
                 Err(err) => return Err(ParseError::new(
-                    format!("Malformed hours field in timestamp: {} - {}", str, err)
+                    format!("Error parsing hours field in timestamp: {} - {}", str, err)
                 )),
             },
             None => return Err(ParseError::new(
@@ -61,9 +66,14 @@ impl Timestamp {
 
         let minutes = match captures.get(2) {
             Some(minutes_match) => match minutes_match.as_str().parse() {
-                Ok(minutes) => minutes,
+                Ok(minutes) => match minutes {
+                    m if m <= 59 => m,
+                    _ => return Err(ParseError::new(
+                        format!("Malformed minutes field in timestamp: {}", str)
+                    ))
+                },
                 Err(err) => return Err(ParseError::new(
-                    format!("Malformed minutes field in timestamp: {} - {}", str, err)
+                    format!("Error parsing minutes field in timestamp: {} - {}", str, err)
                 )),
             },
             None => return Err(ParseError::new(
@@ -73,9 +83,14 @@ impl Timestamp {
 
         let seconds = match captures.get(3) {
             Some(seconds_match) => match seconds_match.as_str().parse() {
-                Ok(seconds) => seconds,
+                Ok(seconds) => match seconds {
+                    sec if sec <= 59 => sec,
+                    _ => return Err(ParseError::new(
+                        format!("Malformed seconds field in timestamp: {}", str)
+                    ))
+                },
                 Err(err) => return Err(ParseError::new(
-                    format!("Malformed seconds field in timestamp: {} - {}", str, err)
+                    format!("Error parsing seconds field in timestamp: {} - {}", str, err)
                 )),
             },
             None => return Err(ParseError::new(
@@ -85,7 +100,12 @@ impl Timestamp {
 
         let milliseconds = match captures.get(4) {
             Some(milliseconds_match) => match milliseconds_match.as_str().parse() {
-                Ok(milliseconds) => milliseconds,
+                Ok(milliseconds) =>  match milliseconds {
+                    ms if ms <= 999 => ms,
+                    _ => return Err(ParseError::new(
+                        format!("Malformed milliseconds field in timestamp: {}", str) 
+                    )) 
+                },
                 Err(err) => return Err(ParseError::new(
                     format!("Malformed milliseconds field in timestamp: {} - {}", str, err)
                 )),
@@ -187,13 +207,32 @@ mod test {
 
     #[test]
     fn parse_valid_timestamp() {
-        let valid_timestamp_str = "16:54:12,590";
+        let valid_timestamp_str = "01:54:12,590";
         let timestamp = Timestamp::build(valid_timestamp_str).unwrap();
 
-        assert_eq!(16, timestamp.hours);
+        assert_eq!(1, timestamp.hours);
         assert_eq!(54, timestamp.minutes);
         assert_eq!(12, timestamp.seconds);
         assert_eq!(590, timestamp.milliseconds);
+        assert_eq!("01:54:12,590", timestamp.to_string());
+    }
+
+    #[test]
+    fn parse_invalid_timestamp() {
+        let negative_hours_str = "-15:01:01,000";
+        assert!(Timestamp::build(negative_hours_str).is_err());
+
+        let overflow_hours = "100:01:01,000";
+        assert!(Timestamp::build(overflow_hours).is_err());
+
+        let overflow_mins = "000:60:01,000";
+        assert!(Timestamp::build(overflow_mins).is_err());
+
+        let overflow_secs = "000:00:60,000";
+        assert!(Timestamp::build(overflow_secs).is_err());
+
+        let missing_hrs = ":00:00,000";
+        assert!(Timestamp::build(missing_hrs).is_err());
     }
 
     #[test]
