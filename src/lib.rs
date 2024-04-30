@@ -13,16 +13,26 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn build(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 4 {
-            return Err("Not enough arguments");
-        }
+    pub fn build(
+        mut args: impl Iterator<Item = String>
+    ) -> Result<Config, &'static str> {
+        args.next();
 
-        let input_filepath = args[1].clone();
-        let output_filepath = args[2].clone();
-        let offset_ms = match args[3].clone().parse() {
-            Ok(num) => num,
-            Err(_) => return Err("Error parsing offset"),
+        let input_filepath = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get an input filepath"),
+        };
+        println!("{}", input_filepath);
+        let output_filepath = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get an output filepath"),
+        };
+        let offset_ms = match args.next() {
+            Some(arg) => match arg.parse::<i32>() {
+                Ok(offset) => offset,
+                Err(_) => return Err("Error parsing offset"),
+            },
+            None => return Err("Didn't get an offset"),
         };
 
         Ok(Config { input_filepath, output_filepath, offset_ms })
