@@ -1,3 +1,4 @@
+use clap::Parser;
 use regex::Regex;
 use std::error::Error;
 use std::fs;
@@ -5,37 +6,12 @@ use std::process;
 use std::fs::File;
 use std::io::Write;
 
-#[derive(Debug)]
+#[derive(Debug, Parser)]
 pub struct Config {
     pub input_filepath: std::path::PathBuf,
     pub output_filepath: std::path::PathBuf,
+    #[arg(allow_negative_numbers = true)]
     pub offset_ms: i32,
-}
-    
-impl Config {
-    pub fn build(
-        mut args: impl Iterator<Item = String>
-    ) -> Result<Config, &'static str> {
-        args.next();
-
-        let input_filepath = match args.next() {
-            Some(arg) => arg.into(),
-            None => return Err("Didn't get an input filepath"),
-        };
-        let output_filepath = match args.next() {
-            Some(arg) => arg.into(),
-            None => return Err("Didn't get an output filepath"),
-        };
-        let offset_ms = match args.next() {
-            Some(arg) => match arg.parse::<i32>() {
-                Ok(offset) => offset,
-                Err(_) => return Err("Error parsing offset"),
-            },
-            None => return Err("Didn't get an offset"),
-        };
-
-        Ok(Config { input_filepath, output_filepath, offset_ms })
-    }
 }
 
 #[derive(Debug, PartialEq)]
