@@ -7,11 +7,11 @@ use std::io::Write;
 
 #[derive(Debug)]
 pub struct Config {
-    pub input_filepath: String,
-    pub output_filepath: String,
+    pub input_filepath: std::path::PathBuf,
+    pub output_filepath: std::path::PathBuf,
     pub offset_ms: i32,
 }
-
+    
 impl Config {
     pub fn build(
         mut args: impl Iterator<Item = String>
@@ -19,12 +19,11 @@ impl Config {
         args.next();
 
         let input_filepath = match args.next() {
-            Some(arg) => arg,
+            Some(arg) => arg.into(),
             None => return Err("Didn't get an input filepath"),
         };
-        println!("{}", input_filepath);
         let output_filepath = match args.next() {
-            Some(arg) => arg,
+            Some(arg) => arg.into(),
             None => return Err("Didn't get an output filepath"),
         };
         let offset_ms = match args.next() {
@@ -177,7 +176,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let output_filepath = &config.output_filepath;
 
     let contents = fs::read_to_string(input_filepath).unwrap_or_else(|err| {
-        eprintln!("Couldn't read file: {input_filepath}, {err}");
+        eprintln!("Couldn't read file: {}, {}", input_filepath.to_str().expect("Input filepath should be valid String"), err);
         process::exit(1);
     });
 
