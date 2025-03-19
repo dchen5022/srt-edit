@@ -2,14 +2,13 @@ use clap::Parser;
 use regex::Regex;
 use std::error::Error;
 use std::fs;
-use std::process;
 use std::fs::File;
 use std::io::Write;
+use std::process;
 
 #[derive(Debug, Parser)]
 pub struct Config {
     pub input_filepath: std::path::PathBuf,
-    pub output_filepath: std::path::PathBuf,
     #[arg(allow_negative_numbers = true)]
     pub offset_ms: i32,
 }
@@ -29,92 +28,127 @@ impl Timestamp {
 
         let captures = match re.captures(str) {
             Some(captures) => captures,
-            None => return Err(ParseError::new("Timestamp doesn't match .srt timestamp format: ".to_string() + str)),
+            None => {
+                return Err(ParseError::new(
+                    "Timestamp doesn't match .srt timestamp format: ".to_string() + str,
+                ))
+            }
         };
 
         let hours = match captures.get(1) {
             Some(hours_match) => match hours_match.as_str().parse() {
                 Ok(hours) => match hours {
                     h if h <= 99 => h,
-                    _ => return Err(ParseError::new(
-                        format!("Malformed hours field in timestamp: {}", str)
-                    ))
+                    _ => {
+                        return Err(ParseError::new(format!(
+                            "Malformed hours field in timestamp: {}",
+                            str
+                        )))
+                    }
+                },
+                Err(err) => {
+                    return Err(ParseError::new(format!(
+                        "Error parsing hours field in timestamp: {} - {}",
+                        str, err
+                    )))
                 }
-                Err(err) => return Err(ParseError::new(
-                    format!("Error parsing hours field in timestamp: {} - {}", str, err)
-                )),
             },
-            None => return Err(ParseError::new(
-                "Missing hours field in timestamp: ".to_string() + str
-            )),
+            None => {
+                return Err(ParseError::new(
+                    "Missing hours field in timestamp: ".to_string() + str,
+                ))
+            }
         };
 
         let minutes = match captures.get(2) {
             Some(minutes_match) => match minutes_match.as_str().parse() {
                 Ok(minutes) => match minutes {
                     m if m <= 59 => m,
-                    _ => return Err(ParseError::new(
-                        format!("Malformed minutes field in timestamp: {}", str)
-                    ))
+                    _ => {
+                        return Err(ParseError::new(format!(
+                            "Malformed minutes field in timestamp: {}",
+                            str
+                        )))
+                    }
                 },
-                Err(err) => return Err(ParseError::new(
-                    format!("Error parsing minutes field in timestamp: {} - {}", str, err)
-                )),
+                Err(err) => {
+                    return Err(ParseError::new(format!(
+                        "Error parsing minutes field in timestamp: {} - {}",
+                        str, err
+                    )))
+                }
             },
-            None => return Err(ParseError::new(
-                "Missing minutes field in timestamp: ".to_string() + str
-            )),
+            None => {
+                return Err(ParseError::new(
+                    "Missing minutes field in timestamp: ".to_string() + str,
+                ))
+            }
         };
 
         let seconds = match captures.get(3) {
             Some(seconds_match) => match seconds_match.as_str().parse() {
                 Ok(seconds) => match seconds {
                     sec if sec <= 59 => sec,
-                    _ => return Err(ParseError::new(
-                        format!("Malformed seconds field in timestamp: {}", str)
-                    ))
+                    _ => {
+                        return Err(ParseError::new(format!(
+                            "Malformed seconds field in timestamp: {}",
+                            str
+                        )))
+                    }
                 },
-                Err(err) => return Err(ParseError::new(
-                    format!("Error parsing seconds field in timestamp: {} - {}", str, err)
-                )),
+                Err(err) => {
+                    return Err(ParseError::new(format!(
+                        "Error parsing seconds field in timestamp: {} - {}",
+                        str, err
+                    )))
+                }
             },
-            None => return Err(ParseError::new(
-                "Missing seconds field in timestamp: ".to_string() + str
-            )),
+            None => {
+                return Err(ParseError::new(
+                    "Missing seconds field in timestamp: ".to_string() + str,
+                ))
+            }
         };
 
         let milliseconds = match captures.get(4) {
             Some(milliseconds_match) => match milliseconds_match.as_str().parse() {
-                Ok(milliseconds) =>  match milliseconds {
+                Ok(milliseconds) => match milliseconds {
                     ms if ms <= 999 => ms,
-                    _ => return Err(ParseError::new(
-                        format!("Malformed milliseconds field in timestamp: {}", str) 
-                    )) 
+                    _ => {
+                        return Err(ParseError::new(format!(
+                            "Malformed milliseconds field in timestamp: {}",
+                            str
+                        )))
+                    }
                 },
-                Err(err) => return Err(ParseError::new(
-                    format!("Malformed milliseconds field in timestamp: {} - {}", str, err)
-                )),
+                Err(err) => {
+                    return Err(ParseError::new(format!(
+                        "Malformed milliseconds field in timestamp: {} - {}",
+                        str, err
+                    )))
+                }
             },
-            None => return Err(ParseError::new(
-                "Missing milliseconds field in timestamp: ".to_string() + str
-            )),
+            None => {
+                return Err(ParseError::new(
+                    "Missing milliseconds field in timestamp: ".to_string() + str,
+                ))
+            }
         };
 
         Ok(Timestamp {
             hours,
             minutes,
             seconds,
-            milliseconds
+            milliseconds,
         })
-
     }
 
     pub fn apply_offset_ms(&mut self, offset_ms: i32) {
-        let total_milliseconds: i32 = (self.hours as i32 * 3_600_000) +
-                            (self.minutes as i32 * 60_000) +
-                            (self.seconds as i32 * 1000) +
-                            self.milliseconds as i32 +
-                            offset_ms;
+        let total_milliseconds: i32 = (self.hours as i32 * 3_600_000)
+            + (self.minutes as i32 * 60_000)
+            + (self.seconds as i32 * 1000)
+            + self.milliseconds as i32
+            + offset_ms;
         if total_milliseconds <= 0 {
             self.hours = 0;
             self.minutes = 0;
@@ -122,7 +156,7 @@ impl Timestamp {
             self.milliseconds = 0;
             return;
         }
-        self.hours = (total_milliseconds/ 3_600_000) as u32;
+        self.hours = (total_milliseconds / 3_600_000) as u32;
         let remaining_milliseconds = total_milliseconds % 3_600_000;
         self.minutes = (remaining_milliseconds / 60_000) as u32;
         let remaining_milliseconds = remaining_milliseconds % 60_000;
@@ -131,14 +165,16 @@ impl Timestamp {
     }
 
     pub fn to_string(&self) -> String {
-        format!("{:02}:{:02}:{:02},{:03}", self.hours, self.minutes, self.seconds, self.milliseconds)
+        format!(
+            "{:02}:{:02}:{:02},{:03}",
+            self.hours, self.minutes, self.seconds, self.milliseconds
+        )
     }
-
 }
 
 #[derive(Debug)]
 pub struct ParseError {
-    pub error_message: String
+    pub error_message: String,
 }
 
 impl ParseError {
@@ -149,10 +185,16 @@ impl ParseError {
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let input_filepath = &config.input_filepath;
-    let output_filepath = &config.output_filepath;
+    let output_filepath = input_filepath;
 
     let contents = fs::read_to_string(input_filepath).unwrap_or_else(|err| {
-        eprintln!("Couldn't read file: {}, {}", input_filepath.to_str().expect("Input filepath should be valid String"), err);
+        eprintln!(
+            "Couldn't read file: {}, {}",
+            input_filepath
+                .to_str()
+                .expect("Input filepath should be valid String"),
+            err
+        );
         process::exit(1);
     });
 
@@ -171,9 +213,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             start_timestamp.apply_offset_ms(config.offset_ms);
             end_timestamp.apply_offset_ms(config.offset_ms);
 
-            let offset_line = format!("{} --> {}", start_timestamp.to_string(), end_timestamp.to_string()); 
+            let offset_line = format!(
+                "{} --> {}",
+                start_timestamp.to_string(),
+                end_timestamp.to_string()
+            );
             output_content.push(offset_line);
-
         } else {
             output_content.push(line.to_string());
         }
@@ -224,7 +269,7 @@ mod test {
     fn apply_offest() {
         let mut timestamp = Timestamp::build("16:54:12,590").unwrap();
         timestamp.apply_offset_ms(100);
-        
+
         assert_eq!(16, timestamp.hours);
         assert_eq!(54, timestamp.minutes);
         assert_eq!(12, timestamp.seconds);
