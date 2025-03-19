@@ -17,6 +17,79 @@ pub struct Config {
     pub offset_ms: i32,
 }
 
+#[derive(Debug)]
+pub struct ParseError {
+    pub error_message: String,
+}
+
+impl ParseError {
+    pub fn new(error_message: String) -> Self {
+        ParseError { error_message }
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    for input_file in config.input_files {
+        apply_offset_to_file(&input_file, config.offset_ms)?;
+        println!(
+            "Offset successfully applied to {}",
+            input_file.to_string_lossy()
+        );
+    }
+
+    Ok(())
+}
+
+pub fn apply_offset_to_file(
+    input_filepath: &PathBuf,
+    offset_ms: i32,
+) -> Result<(), Box<dyn Error>> {
+    let output_filepath = input_filepath;
+
+    let contents = fs::read_to_string(input_filepath).unwrap_or_else(|err| {
+        eprintln!(
+            "Couldn't read file: {}, {}",
+            input_filepath
+                .to_str()
+                .expect("Input filepath should be valid String"),
+            err
+        );
+        process::exit(1);
+    });
+
+    let input_lines: Vec<&str> = contents.lines().collect();
+
+    let re = Regex::new(r"(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})").unwrap();
+
+    let mut output_content: Vec<String> = Vec::with_capacity(input_lines.len());
+    for line in contents.lines() {
+        if let Some(captures) = re.captures(line) {
+            let start_timestamp_str = captures.get(1).unwrap().as_str();
+            let mut start_timestamp = Timestamp::build(start_timestamp_str).unwrap();
+            let end_timestamp_str = captures.get(2).unwrap().as_str();
+            let mut end_timestamp = Timestamp::build(end_timestamp_str).unwrap();
+
+            start_timestamp.apply_offset_ms(offset_ms);
+            end_timestamp.apply_offset_ms(offset_ms);
+
+            let offset_line = format!(
+                "{} --> {}",
+                start_timestamp.to_string(),
+                end_timestamp.to_string()
+            );
+            output_content.push(offset_line);
+        } else {
+            output_content.push(line.to_string());
+        }
+    }
+
+    let mut output_file = File::create(output_filepath)?;
+    let output_string = output_content.join("\n");
+    output_file.write_all(output_string.as_bytes())?;
+
+    Ok(())
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Timestamp {
     pub hours: u32,
@@ -174,72 +247,6 @@ impl Timestamp {
             self.hours, self.minutes, self.seconds, self.milliseconds
         )
     }
-}
-
-#[derive(Debug)]
-pub struct ParseError {
-    pub error_message: String,
-}
-
-impl ParseError {
-    pub fn new(error_message: String) -> Self {
-        ParseError { error_message }
-    }
-}
-
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    for input_file in config.input_files {
-        apply_offset_to_file(&input_file, config.offset_ms)?;
-    }
-
-    Ok(())
-}
-
-pub fn apply_offset_to_file(input_file: &PathBuf, offset_ms: i32) -> Result<(), Box<dyn Error>> {
-    let output_file = input_file;
-
-    let contents = fs::read_to_string(input_file).unwrap_or_else(|err| {
-        eprintln!(
-            "Couldn't read file: {}, {}",
-            input_file
-                .to_str()
-                .expect("Input filepath should be valid String"),
-            err
-        );
-        process::exit(1);
-    });
-
-    let input_lines: Vec<&str> = contents.lines().collect();
-
-    let re = Regex::new(r"^(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})$").unwrap();
-
-    let mut output_content: Vec<String> = Vec::with_capacity(input_lines.len());
-    for line in contents.lines() {
-        if let Some(captures) = re.captures(line) {
-            let start_timestamp_str = captures.get(1).unwrap().as_str();
-            let mut start_timestamp = Timestamp::build(start_timestamp_str).unwrap();
-            let end_timestamp_str = captures.get(2).unwrap().as_str();
-            let mut end_timestamp = Timestamp::build(end_timestamp_str).unwrap();
-
-            start_timestamp.apply_offset_ms(offset_ms);
-            end_timestamp.apply_offset_ms(offset_ms);
-
-            let offset_line = format!(
-                "{} --> {}",
-                start_timestamp.to_string(),
-                end_timestamp.to_string()
-            );
-            output_content.push(offset_line);
-        } else {
-            output_content.push(line.to_string());
-        }
-    }
-
-    let mut output_file = File::create(output_file)?;
-    let output_string = output_content.join("\n");
-    output_file.write_all(output_string.as_bytes())?;
-
-    Ok(())
 }
 
 #[cfg(test)]
