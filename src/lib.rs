@@ -1,15 +1,19 @@
-use clap::Parser;
+use clap::{Parser, ValueHint};
 use regex::Regex;
 use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process;
 
 #[derive(Debug, Parser)]
 pub struct Config {
-    pub input_filepath: std::path::PathBuf,
-    #[arg(allow_negative_numbers = true)]
+    /// List of input files
+    #[arg(required = true, value_hint = ValueHint::AnyPath)]
+    pub input_files: Vec<PathBuf>,
+    // Offset to apply to subtitle timings
+    #[arg(required = true, allow_negative_numbers = true)]
     pub offset_ms: i32,
 }
 
@@ -184,13 +188,20 @@ impl ParseError {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let input_filepath = &config.input_filepath;
-    let output_filepath = input_filepath;
+    for input_file in config.input_files {
+        apply_offset_to_file(&input_file, config.offset_ms)?;
+    }
 
-    let contents = fs::read_to_string(input_filepath).unwrap_or_else(|err| {
+    Ok(())
+}
+
+pub fn apply_offset_to_file(input_file: &PathBuf, offset_ms: i32) -> Result<(), Box<dyn Error>> {
+    let output_file = input_file;
+
+    let contents = fs::read_to_string(input_file).unwrap_or_else(|err| {
         eprintln!(
             "Couldn't read file: {}, {}",
-            input_filepath
+            input_file
                 .to_str()
                 .expect("Input filepath should be valid String"),
             err
@@ -210,8 +221,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             let end_timestamp_str = captures.get(2).unwrap().as_str();
             let mut end_timestamp = Timestamp::build(end_timestamp_str).unwrap();
 
-            start_timestamp.apply_offset_ms(config.offset_ms);
-            end_timestamp.apply_offset_ms(config.offset_ms);
+            start_timestamp.apply_offset_ms(offset_ms);
+            end_timestamp.apply_offset_ms(offset_ms);
 
             let offset_line = format!(
                 "{} --> {}",
@@ -224,7 +235,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mut output_file = File::create(output_filepath)?;
+    let mut output_file = File::create(output_file)?;
     let output_string = output_content.join("\n");
     output_file.write_all(output_string.as_bytes())?;
 
